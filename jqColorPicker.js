@@ -17,7 +17,7 @@
         _color,
         _options,
 
-        _$trigger, _$UI,
+        _$trigger, _$UI, 
         _$z_slider, _$xy_slider,
         _$xy_cursor, _$z_cursor , _$alpha , _$alpha_cursor,
 
@@ -25,6 +25,7 @@
         _pointerdown = 'touchstart.tcp mousedown.tcp pointerdown.tcp',
         _pointerup = 'touchend.tcp mouseup.tcp pointerup.tcp',
         _GPU = false,
+        _round = Math.round,
         _animate = window.requestAnimationFrame ||
             window.webkitRequestAnimationFrame || function(cb){cb()},
         _html = '<div class="cp-color-picker"><div class="cp-z-slider"><div c' +
@@ -32,7 +33,7 @@
             'ass="cp-white"></div><div class="cp-xy-cursor"></div></div><div ' +
             'class="cp-alpha"><div class="cp-alpha-cursor"></div></div></div>',
             // 'grunt-contrib-uglify' puts all this back to one single string...
-        _css = '.cp-color-picker{position:absolute;overflow:hidden;padding:6p' +
+        _css = '.cp-color-picker{position:fixed;overflow:hidden;padding:6p' +
             'x 6px 0;background-color:#444;color:#bbb;font-family:Arial,Helve' +
             'tica,sans-serif;font-size:12px;font-weight:400;cursor:default;bo' +
             'rder-radius:5px}.cp-color-picker>div{position:relative;overflow:' +
@@ -91,19 +92,20 @@
             _colorPicker.$trigger = $this;
 
             (_$UI || build()).css({
-                'left': (_$UI._left = position.left) -
-                    ((_$UI._left += _$UI._width -
+                // 'width': _$UI[0]._width,
+                'left': (_$UI[0]._left = position.left) -
+                    ((_$UI[0]._left += _$UI[0]._width -
                     ($window.scrollLeft() + $window.width())) + gap > 0 ?
-                    _$UI._left + gap : 0),
-                'top': (_$UI._top = position.top + $this.outerHeight()) -
-                    ((_$UI._top += _$UI._height -
+                    _$UI[0]._left + gap : 0),
+                'top': (_$UI[0]._top = position.top + $this.outerHeight()) -
+                    ((_$UI[0]._top += _$UI[0]._height -
                     ($window.scrollTop() + $window.height())) + gap > 0 ?
-                    _$UI._top + gap : 0)
+                    _$UI[0]._top + gap : 0)
             }).show(_options.animationSpeed, function() {
                 if (event === true) { // resize, scroll
                     return;
                 }
-                _$alpha.toggle(!!_options.opacity)._width = _$alpha.width();
+                _$alpha._width = _$alpha.width();
                 _$xy_slider._width = _$xy_slider.width();
                 _$xy_slider._height = _$xy_slider.height();
                 _$z_slider._height = _$z_slider.height();
@@ -125,23 +127,25 @@
         $('head').append('<style type="text/css" id="tinyColorPickerStyles">' +
             (_options.css || _css) + (_options.cssAddon || '') + '</style>');
 
-        return $(_html).css({'margin': _options.margin})
-            .appendTo('body')
+        return _colorPicker.$UI = _$UI =
+            $(_html).css({'margin': _options.margin})
+            .appendTo(_options.appendTo || 'body')
             .show(0, function() {
-                _colorPicker.$UI = _$UI = $(this);
+                var $this = $(this);
 
-                _GPU = _options.GPU && _$UI.css('perspective') !== undefined;
+                _GPU = _options.GPU && $this.css('perspective') !== undefined;
                 _$z_slider = $('.cp-z-slider', this);
                 _$xy_slider = $('.cp-xy-slider', this);
                 _$xy_cursor = $('.cp-xy-cursor', this);
                 _$z_cursor = $('.cp-z-cursor', this);
-                _$alpha = $('.cp-alpha', this);
+                _$alpha = $('.cp-alpha', this).toggle(!!_options.opacity);
                 _$alpha_cursor = $('.cp-alpha-cursor', this);
-                _options.buildCallback.call(_colorPicker, _$UI);
-                _$UI.prepend('<div>').children().eq(0).css('width',
-                    _$UI.children().eq(0).width()); // stabilizer
-                _$UI._width = this.offsetWidth;
-                _$UI._height = this.offsetHeight;
+                _options.buildCallback.call(_colorPicker, $this);
+                $this.prepend('<div>').children().eq(0).css('width',
+                    $this.children().eq(0).width() // stabilizer
+                );
+                this._width = this.offsetWidth;
+                this._height = this.offsetHeight;
             }).hide();
     }
 
@@ -197,8 +201,8 @@
             hueRGB = colors.hueRGB,
             RGB = colors.RND.rgb,
             HSL = colors.RND.hsl,
-            dark = _options.dark,
-            light = _options.light,
+            dark = '#222',
+            light = '#ddd',
             colorText = _color.toString(_$trigger._colorMode, _options.forceAlpha),
             HUEContrast = colors.HUELuminance > 0.22 ? dark : light,
             alphaContrast = colors.rgbaMixBlack.luminance > 0.22 ? dark : light,
@@ -264,8 +268,7 @@
     }
 
     $.fn.colorPicker = function(options) {
-        var _this = this,
-            noop = function(){};
+        var noop = function(){};
 
         options = $.extend({
             animationSpeed: 150,
@@ -278,8 +281,6 @@
             body: document.body,
             scrollResize: true,
             gap: 4,
-            dark: '#222',
-            light: '#DDD'
             // forceAlpha: undefined,
             // css: '',
             // cssAddon: '',
@@ -294,22 +295,18 @@
             }
         });
         _instance = _instance.add(this);
-        this.colorPicker = _colorPicker || new ColorPicker(options);
-        this.options = options;
+        this.colorPicker = _instance.colorPicker =
+            _colorPicker || new ColorPicker(options);
 
         $(options.body).off('.tcp').on(_pointerdown, function(e) {
             !_instance.add(_$UI).find(e.target)
                 .add(_instance.filter(e.target))[0] && toggle();
         });
 
-        return this.on('focusin.tcp click.tcp', function(event) {
-            _colorPicker.color.options = // swap options to fake new instance
-                $.extend(_colorPicker.color.options, _options = _this.options);
-            toggle.call(this, event);
-        })
+        return this.on('focusin.tcp click.tcp', toggle)
         .on('change.tcp', function() {
             _color.setColor(this.value || '#FFF');
-            _this.colorPicker.render(true);
+            _instance.colorPicker.render(true);
         })
         .each(function() {
             var value = extractValue(this),
@@ -322,8 +319,7 @@
             $elm.css({'background-color': value,
                 'color': function() {
                     return _color.setColor(value)
-                        .rgbaMixBGMixCustom.luminance > 0.22 ?
-                        options.dark : options.light
+                        .rgbaMixBGMixCustom.luminance > 0.22 ? '#222' : '#DDD'
                 }
             });
         });
